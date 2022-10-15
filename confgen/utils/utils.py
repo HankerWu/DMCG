@@ -7,6 +7,7 @@ import os
 import numpy as np
 from torch_geometric.utils import to_dense_adj, dense_to_sparse
 from tqdm import tqdm
+from rdkit.Chem import AllChem
 
 
 class WarmCosine:
@@ -35,8 +36,9 @@ class WarmCosine:
 
 
 def set_rdmol_positions(rdkit_mol, pos):
-    assert rdkit_mol.GetConformer(0).GetPositions().shape[0] == pos.shape[0]
+    assert rdkit_mol.GetNumAtoms() == pos.shape[0]
     mol = copy.deepcopy(rdkit_mol)
+    AllChem.EmbedMolecule(mol)
     for i in range(pos.shape[0]):
         mol.GetConformer(0).SetAtomPosition(i, pos[i].tolist())
     return mol

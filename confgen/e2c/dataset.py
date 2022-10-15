@@ -8,12 +8,10 @@ import pickle
 from rdkit import Chem
 from rdkit.Chem.rdchem import Mol, HybridizationType
 import torch
-from confgen import utils
 from torch_geometric.data import InMemoryDataset, Data
 from torch_sparse import SparseTensor
 import re
-import confgen
-from ..molecule.graph import rdk2graph, rdk2graphedge
+from confgen.molecule.graph import rdk2graph, rdk2graphedge
 import copy
 from rdkit.Chem.rdmolops import RemoveHs
 from confgen.molecule.gt import isomorphic_core
@@ -32,6 +30,8 @@ class PygGeomDataset(InMemoryDataset):
         extend_edge=False,
         data_split="cgcf",
         remove_hs=False,
+        inference=False,
+        inference_mols=None
     ):
         self.original_root = root
         self.rdk2graph = rdk2graph
@@ -54,9 +54,18 @@ class PygGeomDataset(InMemoryDataset):
         self.dataset_name = dataset
         self.data_split = data_split
         self.remove_hs = remove_hs
+        self.inference = inference
+        self.inference_mols = inference_mols
 
-        super().__init__(self.folder, transform, pre_transform)
-        self.data, self.slices = torch.load(self.processed_paths[0])
+        # super().__init__(self.folder, transform, pre_transform)
+        self.root = root
+        self.transform = transform
+        self.pre_transform = pre_transform
+        self._indices: Optional[Sequence] = None
+        if self.inference:
+            self.process4inference(self.inference_mols)
+        else:
+            self.data, self.slices = torch.load(self.processed_paths[0])
 
     @property
     def raw_file_names(self):
@@ -68,12 +77,16 @@ class PygGeomDataset(InMemoryDataset):
         return "geometric_data_processed.pt"
 
     def download(self):
+        if self.inference:
+            return
         if os.path.exists(self.processed_paths[0]):
             return
         else:
             assert os.path.exists(self.base_path)
 
     def process(self):
+        if self.inference:
+            return
         print("Converting pickle files into graphs...")
         assert self.dataset_name in ["qm9", "drugs", "iso17"]
         if self.data_split == "cgcf":
@@ -380,10 +393,58 @@ class PygGeomDataset(InMemoryDataset):
         torch.save(
             split_dict, os.path.join(self.root, "split", "split_dict.pt"),
         )
+    
+    def process4inference(self, mol_list):
+        bad_case = 0
+        valid_conformation = 0
+        data_list = []
+        for mol in tqdm(mol_list, total=len(mol_list)):
+
+            if mol is None:
+                bad_case += 1
+                continue
+            if "." in Chem.MolToSmiles(mol):
+                bad_case += 1
+                continue
+            if mol.GetNumBonds() < 1:
+                bad_case += 1
+                continue
+
+            if self.remove_hs:
+                mol = RemoveHs(mol)
+            graph = self.rdk2graph(mol)
+            assert len(graph["edge_attr"]) == graph["edge_index"].shape[1]
+            assert len(graph["node_feat"]) == graph["num_nodes"]
+
+            data = CustomData()
+            data.edge_index = torch.from_numpy(graph["edge_index"]).to(torch.int64)
+            data.edge_attr = torch.from_numpy(graph["edge_attr"]).to(torch.int64)
+            data.x = torch.from_numpy(graph["node_feat"]).to(torch.int64)
+            data.n_nodes = graph["n_nodes"]
+            data.n_edges = graph["n_edges"]
+            # data.pos = torch.from_numpy(mol.GetConformer(0).GetPositions()).to(torch.float)
+            data.pos = torch.zeros((mol.GetNumAtoms(), 3), dtype=torch.float)
+
+            data.rd_mol = copy.deepcopy(mol)
+
+            data.nei_src_index = torch.from_numpy(graph["nei_src_index"]).to(torch.int64)
+            data.nei_tgt_index = torch.from_numpy(graph["nei_tgt_index"]).to(torch.int64)
+            data.nei_tgt_mask = torch.from_numpy(graph["nei_tgt_mask"]).to(torch.bool)
+
+            valid_conformation += 1
+            data_list.append(data)
+
+        if self.pre_transform is not None:
+            data_list = [self.pre_transform(data) for data in data_list]
+
+        data, slices = self.collate(data_list)
+        self.data = data
+        self.slices = slices
+        print(f"num confs {valid_conformation} num bad cases {bad_case}")
 
 
 class CustomData(Data):
-    def __cat_dim__(self, key, value):
+    def __cat_dim__(self, key, value, *args, **kwargs):
         if isinstance(value, SparseTensor):
             return (0, 1)
         elif bool(re.search("(index|face|nei_tgt_mask)", key)):
