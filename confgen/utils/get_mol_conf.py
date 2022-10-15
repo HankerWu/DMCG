@@ -12,7 +12,7 @@ import pickle
 from confgen.utils.utils import set_rdmol_positions
 from rdkit.Chem import AllChem
 
-def load_model(ckpt_dir, device, sample_beta):
+def load_model(ckpt_dir, device, sample_beta=1.2):
     assert os.path.exists(ckpt_dir)
     checkpoint = torch.load(ckpt_dir, map_location=device)
     ckpt_args = checkpoint["args"]
@@ -79,7 +79,7 @@ def optimize_confomer(mol):
         print("mmff error")
         return None
 
-def evaluate(model, device, mol_list, repeat, batch_size=1, num_workers=1):
+def evaluate(model, device, mol_list, repeat=1, batch_size=1, num_workers=1):
     model.eval()
     mol_preds = []
     loader = load_dataset(mol_list, batch_size, num_workers)
