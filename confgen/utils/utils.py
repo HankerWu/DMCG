@@ -38,7 +38,9 @@ class WarmCosine:
 def set_rdmol_positions(rdkit_mol, pos):
     assert rdkit_mol.GetNumAtoms() == pos.shape[0]
     mol = copy.deepcopy(rdkit_mol)
-    AllChem.EmbedMolecule(mol)
+    emb_success = AllChem.EmbedMolecule(mol, useRandomCoords=True)
+    if emb_success == -1:
+        AllChem.Compute2DCoords(mol)
     for i in range(pos.shape[0]):
         mol.GetConformer(0).SetAtomPosition(i, pos[i].tolist())
     return mol

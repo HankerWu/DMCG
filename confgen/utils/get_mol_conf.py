@@ -54,8 +54,8 @@ def load_model(ckpt_dir, device, sample_beta=1.2):
         del state_dict[k]
     model.load_state_dict(state_dict)
 
-    num_params = sum(p.numel() for p in model.parameters())
-    print(f"#Params: {num_params}")
+    # num_params = sum(p.numel() for p in model.parameters())
+    # print(f"#Params: {num_params}")
     
     return model
 
@@ -77,7 +77,7 @@ def optimize_confomer(mol):
         return mol
     except:
         print("mmff error")
-        return None
+        return mol
 
 def evaluate(model, device, mol_list, repeat=1, batch_size=1, num_workers=1):
     model.eval()
@@ -85,9 +85,8 @@ def evaluate(model, device, mol_list, repeat=1, batch_size=1, num_workers=1):
     loader = load_dataset(mol_list, batch_size, num_workers)
     for r in range(repeat):
         mol_preds.append([])
-        for batch in tqdm(loader, desc="Iteration"):
+        for batch in tqdm(loader):
             batch = batch.to(device)
-        
             with torch.no_grad():
                 pred, _ = model(batch, sample=True)
             pred = pred[-1]
@@ -97,6 +96,7 @@ def evaluate(model, device, mol_list, repeat=1, batch_size=1, num_workers=1):
             for i in range(bsz):
                 mol = set_rdmol_positions(batch.rd_mol[i], pred[pre_nodes : pre_nodes + n_nodes[i]])
                 mol = optimize_confomer(mol)
+                assert mol is not None
                 pre_nodes += n_nodes[i]
                 mol_preds[r].append(mol)
 

@@ -398,7 +398,7 @@ class PygGeomDataset(InMemoryDataset):
         bad_case = 0
         valid_conformation = 0
         data_list = []
-        for mol in tqdm(mol_list, total=len(mol_list)):
+        for mol in tqdm(mol_list):
 
             if mol is None:
                 bad_case += 1
@@ -440,7 +440,7 @@ class PygGeomDataset(InMemoryDataset):
         data, slices = self.collate(data_list)
         self.data = data
         self.slices = slices
-        print(f"num confs {valid_conformation} num bad cases {bad_case}")
+        # print(f"num confs {valid_conformation} num bad cases {bad_case}")
 
 
 class CustomData(Data):
