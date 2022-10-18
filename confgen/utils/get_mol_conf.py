@@ -65,6 +65,7 @@ def load_dataset(mol_list, batch_size=1, num_workers=1):
         inference=True,
         inference_mols=mol_list
     )
+    assert len(dataset) == len(mol_list)
     dataloader = DataLoader(
         dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers,)
     return dataloader
@@ -99,7 +100,7 @@ def evaluate(model, device, mol_list, repeat=1, batch_size=1, num_workers=1):
                 assert mol is not None
                 pre_nodes += n_nodes[i]
                 mol_preds[r].append(mol)
-
+        assert len(mol_preds[0]) == len(mol_list)
     return mol_preds
 
 def main():

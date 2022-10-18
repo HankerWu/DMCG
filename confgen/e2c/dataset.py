@@ -403,12 +403,6 @@ class PygGeomDataset(InMemoryDataset):
             if mol is None:
                 bad_case += 1
                 continue
-            if "." in Chem.MolToSmiles(mol):
-                bad_case += 1
-                continue
-            if mol.GetNumBonds() < 1:
-                bad_case += 1
-                continue
 
             if self.remove_hs:
                 mol = RemoveHs(mol)
